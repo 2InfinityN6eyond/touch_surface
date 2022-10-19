@@ -14,10 +14,6 @@ from pprint import PrettyPrinter
 
 use_realsense = False
 
-
-
-
-
 from pynput.mouse import Button, Controller
 
 mouse = Controller()
