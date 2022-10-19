@@ -15,6 +15,17 @@ import pyautogui
 
 use_realsense = False
 
+from pynput.mouse import Button, Controller
+
+mouse = Controller()
+
+
+from pykinect_azure.k4abt.body2d import Body2d
+import pykinect_azure as pykinect
+from pykinect_azure.k4a import _k4a
+
+
+
 try :
     import pyrealsense2 as rs
     use_realsense =True
@@ -55,36 +66,45 @@ class Posecalculator() : #Process) :
 
         self.run()
 
+
     def run(self) :
-        if use_realsense :
-            self.pipeline = rs.pipeline()
-            self.config = rs.config()
-            self.config.enable_stream(
-                rs.stream.color,
-                self.frame_width,
-                self.frame_height,
-                rs.format.bgr8,
-                self.fps
-            )
-            self.pipeline.start(self.config)
-        else :
-            self.video_cap = cv2.VideoCapture(0)
-            self.video_cap.set(
-                cv2.CAP_PROP_FRAME_WIDTH, 
-                self.frame_width
-            )
-            self.video_cap.set(
-                cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height
-            )
-            self.video_cap.set(
-                cv2.CAP_PROP_FPS, self.fps
-            )
-            self.video_cap.set(
-                cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG")
-            )
+        """
+        self.video_cap = cv2.VideoCapture(0)
+        self.video_cap.set(
+            cv2.CAP_PROP_FRAME_WIDTH, 
+            self.frame_width
+        )
+        self.video_cap.set(
+            cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height
+        )
+        self.video_cap.set(
+            cv2.CAP_PROP_FPS, self.fps
+        )
+        self.video_cap.set(
+            cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG")
+        )
+        """
+
+
+        # Initialize the library, if the library is not found, add the library path as argument
+        pykinect.initialize_libraries(track_body=True)
+
+        # Modify camera configuration
+        device_config = pykinect.default_configuration
+        device_config.color_resolution = pykinect.K4A_COLOR_RESOLUTION_1440P
+        #device_config.depth_mode = pykinect.K4A_DEPTH_MODE_WFOV_UNBINNED
+        device_config.depth_mode = pykinect.K4A_DEPTH_MODE_WFOV_2X2BINNED
+        #print(device_config)
+
+        self.device = pykinect.start_device(config=device_config)
+        bodyTracker = pykinect.start_body_tracker()
+
+        calibration = self.device.get_calibration(
+            pykinect.K4A_DEPTH_MODE_WFOV_2X2BINNED,
+            pykinect.K4A_COLOR_RESOLUTION_1440P
+        )
 
         self.readImage()
-
 
         self.calibrate()
 
@@ -97,10 +117,6 @@ class Posecalculator() : #Process) :
         )
 
         while True :
-
-            if not self.bluetooth_reciever_to_pose_calculator.empty() :
-                self.bluetoothRecieverCb(self.bluetooth_reciever_to_pose_calculator.get())
-
             ret = self.readImage()
             if not ret :
                 print("IMAGE READ FAILED")
@@ -129,6 +145,115 @@ class Posecalculator() : #Process) :
             else : continue
 
     def readImage(self) :
+    
+        capture = self.device.update()
+        body_frame = self.bodyTracker.update()
+
+        ret, color_image = capture.get_color_image()
+
+        self.image = color_image
+
+        ret, depth_color_image = capture.get_colored_depth_image()
+        ret, body_image_color = body_frame.get_segmentation_image()
+
+        #print(depth_color_image.shape, body_image_color.shape)
+
+        if not ret:
+            return None
+            
+        #combined_image = cv2.addWeighted(depth_color_image, 0.6, body_image_color, 0.4, 0)
+        #combined_image = body_frame.draw_bodies(combined_image)
+        
+        body_joints = None
+        try :
+            if body_frame.get_num_bodies() > 0 :
+                body_joints = body_frame.get_body2d()
+                body_handle = body_frame.get_body().handle()
+                
+                body_joints = Body2d.create(
+                    body_handle=body_handle,
+                    calibration=calibration,
+                    bodyIdx=0,
+                    dest_camera= pykinect.K4A_CALIBRATION_TYPE_COLOR
+                )
+            self.body_joints = body_joints
+        except Exception as e : 
+            self.body_joints = None
+            return 
+
+        try :            
+            left_hand_left_end = min(
+                body_joints.joints[7].get_coordinates()[0],
+                body_joints.joints[9].get_coordinates()[0]
+            )
+            left_hand_right_end = max(
+                body_joints.joints[7].get_coordinates()[0],
+                body_joints.joints[9].get_coordinates()[0]
+            )
+            left_hand_top_end = min(
+                body_joints.joints[7].get_coordinates()[1],
+                body_joints.joints[9].get_coordinates()[1]
+            )
+            left_hand_bottom_end = max(
+                body_joints.joints[7].get_coordinates()[1],
+                body_joints.joints[9].get_coordinates()[1]
+            )
+
+            bbox_shape = max(left_hand_right_end - left_hand_left_end, left_hand_bottom_end - left_hand_top_end)
+
+            left_hand_center_x = int((left_hand_right_end + left_hand_left_end) / 2)
+            left_hand_center_y = int((left_hand_top_end + left_hand_bottom_end) / 2)
+
+            left_hand_left_end   = max(left_hand_center_x - bbox_shape, 0)
+            left_hand_right_end  = min(left_hand_center_x + bbox_shape, color_image.shape[1])
+            left_hand_top_end    = max(left_hand_center_y - bbox_shape, 0)
+            left_hand_bottom_end = min(left_hand_center_y + bbox_shape, color_image.shape[0])
+            
+
+            hand_cropped_image = color_image[left_hand_top_end:left_hand_bottom_end, left_hand_left_end:left_hand_right_end].copy()
+            """
+            cv2.line(
+                color_image,
+                body_joints.joints[7].get_coordinates(),
+                body_joints.joints[9].get_coordinates(),
+                (255,255),
+                10,
+                cv2.LINE_8
+            )
+
+            cv2.rectangle(
+                color_image,
+                (left_hand_left_end, left_hand_top_end),
+                (left_hand_right_end, left_hand_bottom_end),
+                (255,255,255),
+                3,
+                cv2.LINE_8
+            )        
+            """
+
+            """
+            image = cv2.cvtColor(hand_cropped_image, cv2.COLOR_BGR2RGB)
+            results = hands.process(image)
+
+            # Draw the hand annotations on the image.
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_drawing.draw_landmarks(
+                        image,
+                        hand_landmarks,
+                        mp_hands.HAND_CONNECTIONS,
+                        mp_drawing_styles.get_default_hand_landmarks_style(),
+                        mp_drawing_styles.get_default_hand_connections_style()
+                    )
+            """
+
+        except Exception as e :
+            print(e)
+
+
+        """
         image = 10
         if use_realsense :
             frames = self.pipeline.wait_for_frames()
@@ -142,6 +267,7 @@ class Posecalculator() : #Process) :
 
         self.image = image
         return ret
+        """
 
 
     def bluetoothRecieverCb(self, data) :
