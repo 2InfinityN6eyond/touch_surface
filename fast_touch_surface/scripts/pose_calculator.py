@@ -10,22 +10,8 @@ import mediapipe as mp
 from scripts.calibration_window import CalibrationWindow
 from scripts.utils import calc_landmark_list
 
-from pprint import PrettyPrinter
-
-use_realsense = False
-
 from pynput.mouse import Button, Controller
-
 mouse = Controller()
-
-
-
-
-try :
-    import pyrealsense2 as rs
-    use_realsense =True
-except :
-    pass
 
 
 class Posecalculator(Process) :
@@ -135,15 +121,7 @@ class Posecalculator(Process) :
 
     def readImage(self) :
         image = 10
-        if use_realsense :
-            frames = self.pipeline.wait_for_frames()
-            color_frame = frames.get_color_frame()
-            image = np.asanyarray(color_frame.get_data())
-
-            ret = True if image is not None else False
-
-        else :
-            ret, image = self.video_cap.read()
+        ret, image = self.video_cap.read()
 
         self.image = image
         return ret
