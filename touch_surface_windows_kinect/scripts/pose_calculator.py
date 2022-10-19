@@ -103,7 +103,7 @@ class Posecalculator() : #Process) :
         self.device = pykinect.start_device(config=device_config)
         self.bodyTracker = pykinect.start_body_tracker()
 
-        calibration = self.device.get_calibration(
+        self.calibration = self.device.get_calibration(
             pykinect.K4A_DEPTH_MODE_WFOV_2X2BINNED,
             pykinect.K4A_COLOR_RESOLUTION_1440P
         )
@@ -123,32 +123,22 @@ class Posecalculator() : #Process) :
         while True :
             ret = self.readImage()
             if not ret :
-                print("IMAGE READ FAILED")
+                continue
 
+            if self.hand_cropped_image is None and self.left_hand_left_end is None and self.left_hand_top_end is None :                
+                print("IMAGE READ FAILED")
+                continue
+            
+            """
             image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
             image.flags.writeable = False
             hand_keypoints_result = hands.process(image)
             image.flags.writeable = True
-            
             """
-            if hand_keypoints_result.multi_hand_landmarks is not None :
-                hand_landmarks = hand_keypoints_result.multi_hand_landmarks[0]
-                landmark_list = calc_landmark_list(image, hand_landmarks)
-
-                index_finger_coord_cam = landmark_list[8]
-                middle_finger_coord_cam = landmark_list[12]
-
-                index_finger_coord = self.transformCoord(
-                    index_finger_coord_cam
-                )
-                middle_finger_coord = self.transformCoord(
-                    middle_finger_coord_cam
-                )
-
-                #pyautogui.moveTo(*index_finger_coord)
-            """
-
-
+            image = cv2.cvtColor(self.hand_cropped_image, cv2.COLOR_BGR2RGB)
+            image.flags.writeable = False
+            hand_keypoints_result = hands.process(image)
+            image.flags.writeable = True
 
             if hand_keypoints_result.multi_hand_landmarks is not None :
                 hand_landmarks = hand_keypoints_result.multi_hand_landmarks[0]
@@ -157,6 +147,11 @@ class Posecalculator() : #Process) :
                 index_finger_coord_cam = landmark_list[8]
                 middle_finger_coord_cam = landmark_list[12]
 
+                index_finger_coord_cam[0] += self.left_hand_left_end
+                index_finger_coord_cam[1] += self.left_hand_top_end
+                middle_finger_coord_cam[0] += self.left_hand_left_end
+                middle_finger_coord_cam[1] += self.left_hand_top_end
+
                 index_finger_coord = self.transformCoord(
                     index_finger_coord_cam
                 )
@@ -164,9 +159,6 @@ class Posecalculator() : #Process) :
                     middle_finger_coord_cam
                 )
 
-                #print(index_finger_coord, middle_finger_coord)
-                #print(pyautogui.size())
-                
                 if index_finger_coord[0] < 0 :
                     #print("trimming low x")
                     index_finger_coord[0] = 1
@@ -196,19 +188,17 @@ class Posecalculator() : #Process) :
     def readImage(self) :
     
         capture = self.device.update()
-        #body_frame = self.bodyTracker.update()
+        body_frame = self.bodyTracker.update()
 
         ret, color_image = capture.get_color_image()
 
         self.image = color_image
 
-        #ret, depth_color_image = capture.get_colored_depth_image()
-        #ret, body_image_color = body_frame.get_segmentation_image()
+        #ret_, depth_color_image = capture.get_colored_depth_image()
+        #ret_, body_image_color = body_frame.get_segmentation_image()
 
         #print(depth_color_image.shape, body_image_color.shape)
 
-        return ret
- 
         #combined_image = cv2.addWeighted(depth_color_image, 0.6, body_image_color, 0.4, 0)
         #combined_image = body_frame.draw_bodies(combined_image)
         
@@ -220,14 +210,14 @@ class Posecalculator() : #Process) :
                 
                 body_joints = Body2d.create(
                     body_handle=body_handle,
-                    calibration=calibration,
+                    calibration= self.calibration,
                     bodyIdx=0,
                     dest_camera= pykinect.K4A_CALIBRATION_TYPE_COLOR
                 )
             self.body_joints = body_joints
         except Exception as e : 
             self.body_joints = None
-            return 
+            return ret
 
         try :            
             left_hand_left_end = min(
@@ -257,8 +247,10 @@ class Posecalculator() : #Process) :
             left_hand_top_end    = max(left_hand_center_y - bbox_shape, 0)
             left_hand_bottom_end = min(left_hand_center_y + bbox_shape, color_image.shape[0])
             
+            self.left_hand_left_end = left_hand_left_end
+            self.left_hand_top_end = left_hand_top_end
 
-            hand_cropped_image = color_image[left_hand_top_end:left_hand_bottom_end, left_hand_left_end:left_hand_right_end].copy()
+            self.hand_cropped_image = color_image[left_hand_top_end:left_hand_bottom_end, left_hand_left_end:left_hand_right_end].copy()
             """
             cv2.line(
                 color_image,
@@ -299,7 +291,7 @@ class Posecalculator() : #Process) :
 
         except Exception as e :
             print(e)
-
+            return ret
 
         """
         image = 10
