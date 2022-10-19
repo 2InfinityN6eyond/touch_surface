@@ -219,7 +219,9 @@ class Posecalculator() : #Process) :
                     bodyIdx=0,
                     dest_camera= pykinect.K4A_CALIBRATION_TYPE_COLOR
                 )
-            self.body_joints = body_joints
+                self.body_joints = body_joints
+                print(body_joints)
+
         except Exception as e : 
             self.body_joints = None
             return ret
