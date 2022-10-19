@@ -186,74 +186,6 @@ class Posecalculator() : #Process) :
 
     def readImage(self) :
 
-        capture = self.device.update()
-        body_frame = self.bodyTracker.update()
-
-        ret, color_image = capture.get_color_image()
-        #ret, depth_color_image = capture.get_colored_depth_image()
-        #ret, body_image_color = body_frame.get_segmentation_image()
-
-        #print(depth_color_image.shape, body_image_color.shape)
-
-        if not ret:
-            return ret
-            
-        #combined_image = cv2.addWeighted(depth_color_image, 0.6, body_image_color, 0.4, 0)
-        #combined_image = body_frame.draw_bodies(combined_image)
-        
-        body_joints = None
-        try :
-            if body_frame.get_num_bodies() > 0 :
-                body_joints = body_frame.get_body2d()
-                body_handle = body_frame.get_body().handle()
-                
-                body_joints = Body2d.create(
-                    body_handle=body_handle,
-                    calibration=self.calibration,
-                    bodyIdx=0,
-                    dest_camera= pykinect.K4A_CALIBRATION_TYPE_COLOR
-                )
-                print(body_joints.joints[7].get_coordinates())
-
-        except Exception as e : 
-            print(e)
-            print('-------')
-            return ret
-
-        try :            
-            left_hand_left_end = min(
-                body_joints.joints[7].get_coordinates()[0],
-                body_joints.joints[9].get_coordinates()[0]
-            )
-            left_hand_right_end = max(
-                body_joints.joints[7].get_coordinates()[0],
-                body_joints.joints[9].get_coordinates()[0]
-            )
-            left_hand_top_end = min(
-                body_joints.joints[7].get_coordinates()[1],
-                body_joints.joints[9].get_coordinates()[1]
-            )
-            left_hand_bottom_end = max(
-                body_joints.joints[7].get_coordinates()[1],
-                body_joints.joints[9].get_coordinates()[1]
-            )
-
-            bbox_shape = max(left_hand_right_end - left_hand_left_end, left_hand_bottom_end - left_hand_top_end)
-
-            left_hand_center_x = int((left_hand_right_end + left_hand_left_end) / 2)
-            left_hand_center_y = int((left_hand_top_end + left_hand_bottom_end) / 2)
-
-            left_hand_left_end   = max(left_hand_center_x - bbox_shape, 0)
-            left_hand_right_end  = min(left_hand_center_x + bbox_shape, color_image.shape[1])
-            left_hand_top_end    = max(left_hand_center_y - bbox_shape, 0)
-            left_hand_bottom_end = min(left_hand_center_y + bbox_shape, color_image.shape[0])
-            
-            hand_cropped_image = color_image[left_hand_top_end:left_hand_bottom_end, left_hand_left_end:left_hand_right_end].copy()
-
-        except Exception as e :
-            print(e)
-
-        '''
         self.image = None
     
         capture = self.device.update()
@@ -290,7 +222,7 @@ class Posecalculator() : #Process) :
                     dest_camera= pykinect.K4A_CALIBRATION_TYPE_COLOR
                 )
                 self.body_joints = body_joints
-                print(body_joints)
+                print("joint found")
 
         except Exception as e : 
             print("joint not found")
@@ -333,10 +265,10 @@ class Posecalculator() : #Process) :
            
             print("readImage() finished")
         except Exception as e :
+            print("error while getting bbox")
             print(e)
             return ret
 
-        '''
 
     def bluetoothRecieverCb(self, data) :
         self.configs_n_vals["index_finger_prev"] = self.configs_n_vals["index_finger_curr"]
