@@ -26,7 +26,6 @@ try :
 except :
     pass
 
-
 class Posecalculator(Process) :
     def __init__(
         self,
