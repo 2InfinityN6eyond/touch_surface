@@ -19,6 +19,11 @@ from pynput.mouse import Button, Controller
 
 mouse = Controller()
 
+#sys.path.append()
+
+ROOT_PATH = os.path.dirname((os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_PATH)
+print(sys.path)
 
 from pykinect_azure.k4abt.body2d import Body2d
 import pykinect_azure as pykinect
