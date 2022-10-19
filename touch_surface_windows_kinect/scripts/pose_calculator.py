@@ -203,6 +203,11 @@ class Posecalculator() : #Process) :
         #combined_image = body_frame.draw_bodies(combined_image)
         
         body_joints = None
+        self.hand_cropped_image = None
+        self.left_hand_left_end = None
+        self.left_hand_top_end = None
+
+
         try :
             if body_frame.get_num_bodies() > 0 :
                 body_joints = body_frame.get_body2d()
