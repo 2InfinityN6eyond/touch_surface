@@ -19,11 +19,8 @@ from pynput.mouse import Button, Controller
 
 mouse = Controller()
 
-#sys.path.append()
-
 ROOT_PATH = os.path.dirname((os.path.abspath(__file__)))
 sys.path.insert(0, ROOT_PATH)
-print(sys.path)
 
 from pykinect_azure.k4abt.body2d import Body2d
 import pykinect_azure as pykinect
@@ -125,22 +122,23 @@ class Posecalculator() : #Process) :
             if not ret :
                 continue
 
-            if self.hand_cropped_image is None and self.left_hand_left_end is None and self.left_hand_top_end is None :                
+
+            print(type(self.hand_cropped_image), self.left_hand_top_end, self.left_hand_left_end)
+            if self.hand_cropped_image is None or self.left_hand_left_end is None or self.left_hand_top_end is None :                
                 print("IMAGE READ FAILED")
                 continue
             
-            """
-            image = cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB)
-            image.flags.writeable = False
-            hand_keypoints_result = hands.process(image)
-            image.flags.writeable = True
-            """
             image = cv2.cvtColor(self.hand_cropped_image, cv2.COLOR_BGR2RGB)
             image.flags.writeable = False
             hand_keypoints_result = hands.process(image)
             image.flags.writeable = True
 
+
+            
             if hand_keypoints_result.multi_hand_landmarks is not None :
+
+                print("mediapipe succeed")
+
                 hand_landmarks = hand_keypoints_result.multi_hand_landmarks[0]
                 landmark_list = calc_landmark_list(image, hand_landmarks)
 
@@ -152,12 +150,17 @@ class Posecalculator() : #Process) :
                 middle_finger_coord_cam[0] += self.left_hand_left_end
                 middle_finger_coord_cam[1] += self.left_hand_top_end
 
+                print(index_finger_coord_cam, middle_finger_coord_cam)
+
+
                 index_finger_coord = self.transformCoord(
                     index_finger_coord_cam
                 )
+
                 middle_finger_coord = self.transformCoord(
                     middle_finger_coord_cam
                 )
+
 
                 if index_finger_coord[0] < 0 :
                     #print("trimming low x")
@@ -173,24 +176,92 @@ class Posecalculator() : #Process) :
                     index_finger_coord[1] = self.screen_height - 1
 
                 print(index_finger_coord, middle_finger_coord)
-
-                
-                #self.to_mouse_controller.put(index_finger_coord)
                 
                 mouse.position = index_finger_coord
 
-                #pyautogui.moveTo(*index_finger_coord)
 
-
-
-            else : continue
+            else :
+                print("mediapipe failed")
+                continue
 
     def readImage(self) :
+
+        capture = self.device.update()
+        body_frame = self.bodyTracker.update()
+
+        ret, color_image = capture.get_color_image()
+        #ret, depth_color_image = capture.get_colored_depth_image()
+        #ret, body_image_color = body_frame.get_segmentation_image()
+
+        #print(depth_color_image.shape, body_image_color.shape)
+
+        if not ret:
+            return ret
+            
+        #combined_image = cv2.addWeighted(depth_color_image, 0.6, body_image_color, 0.4, 0)
+        #combined_image = body_frame.draw_bodies(combined_image)
+        
+        body_joints = None
+        try :
+            if body_frame.get_num_bodies() > 0 :
+                body_joints = body_frame.get_body2d()
+                body_handle = body_frame.get_body().handle()
+                
+                body_joints = Body2d.create(
+                    body_handle=body_handle,
+                    calibration=self.calibration,
+                    bodyIdx=0,
+                    dest_camera= pykinect.K4A_CALIBRATION_TYPE_COLOR
+                )
+                print(body_joints.joints[7].get_coordinates())
+
+        except Exception as e : 
+            print(e)
+            print('-------')
+            return ret
+
+        try :            
+            left_hand_left_end = min(
+                body_joints.joints[7].get_coordinates()[0],
+                body_joints.joints[9].get_coordinates()[0]
+            )
+            left_hand_right_end = max(
+                body_joints.joints[7].get_coordinates()[0],
+                body_joints.joints[9].get_coordinates()[0]
+            )
+            left_hand_top_end = min(
+                body_joints.joints[7].get_coordinates()[1],
+                body_joints.joints[9].get_coordinates()[1]
+            )
+            left_hand_bottom_end = max(
+                body_joints.joints[7].get_coordinates()[1],
+                body_joints.joints[9].get_coordinates()[1]
+            )
+
+            bbox_shape = max(left_hand_right_end - left_hand_left_end, left_hand_bottom_end - left_hand_top_end)
+
+            left_hand_center_x = int((left_hand_right_end + left_hand_left_end) / 2)
+            left_hand_center_y = int((left_hand_top_end + left_hand_bottom_end) / 2)
+
+            left_hand_left_end   = max(left_hand_center_x - bbox_shape, 0)
+            left_hand_right_end  = min(left_hand_center_x + bbox_shape, color_image.shape[1])
+            left_hand_top_end    = max(left_hand_center_y - bbox_shape, 0)
+            left_hand_bottom_end = min(left_hand_center_y + bbox_shape, color_image.shape[0])
+            
+            hand_cropped_image = color_image[left_hand_top_end:left_hand_bottom_end, left_hand_left_end:left_hand_right_end].copy()
+
+        except Exception as e :
+            print(e)
+
+        '''
+        self.image = None
     
         capture = self.device.update()
         body_frame = self.bodyTracker.update()
 
         ret, color_image = capture.get_color_image()
+
+        print("kinnect", ret, type(color_image))
 
         self.image = color_image
 
@@ -207,7 +278,6 @@ class Posecalculator() : #Process) :
         self.left_hand_left_end = None
         self.left_hand_top_end = None
 
-
         try :
             if body_frame.get_num_bodies() > 0 :
                 body_joints = body_frame.get_body2d()
@@ -223,6 +293,8 @@ class Posecalculator() : #Process) :
                 print(body_joints)
 
         except Exception as e : 
+            print("joint not found")
+            print(e)
             self.body_joints = None
             return ret
 
@@ -258,64 +330,13 @@ class Posecalculator() : #Process) :
             self.left_hand_top_end = left_hand_top_end
 
             self.hand_cropped_image = color_image[left_hand_top_end:left_hand_bottom_end, left_hand_left_end:left_hand_right_end].copy()
-            """
-            cv2.line(
-                color_image,
-                body_joints.joints[7].get_coordinates(),
-                body_joints.joints[9].get_coordinates(),
-                (255,255),
-                10,
-                cv2.LINE_8
-            )
-
-            cv2.rectangle(
-                color_image,
-                (left_hand_left_end, left_hand_top_end),
-                (left_hand_right_end, left_hand_bottom_end),
-                (255,255,255),
-                3,
-                cv2.LINE_8
-            )        
-            """
-
-            """
-            image = cv2.cvtColor(hand_cropped_image, cv2.COLOR_BGR2RGB)
-            results = hands.process(image)
-
-            # Draw the hand annotations on the image.
-            image.flags.writeable = True
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    mp_drawing.draw_landmarks(
-                        image,
-                        hand_landmarks,
-                        mp_hands.HAND_CONNECTIONS,
-                        mp_drawing_styles.get_default_hand_landmarks_style(),
-                        mp_drawing_styles.get_default_hand_connections_style()
-                    )
-            """
-
+           
+            print("readImage() finished")
         except Exception as e :
             print(e)
             return ret
 
-        """
-        image = 10
-        if use_realsense :
-            frames = self.pipeline.wait_for_frames()
-            color_frame = frames.get_color_frame()
-            image = np.asanyarray(color_frame.get_data())
-
-            ret = True if image is not None else False
-
-        else :
-            ret, image = self.video_cap.read()
-
-        self.image = image
-        return ret
-        """
-
+        '''
 
     def bluetoothRecieverCb(self, data) :
         self.configs_n_vals["index_finger_prev"] = self.configs_n_vals["index_finger_curr"]
@@ -375,14 +396,8 @@ class Posecalculator() : #Process) :
             coord
         )
         
-        print(transformed)
-        
         transformed = transformed.reshape(3,)
         transformed /= transformed[2]
-
-        print(transformed)
-
-        print()
 
         return [transformed[0], transformed[1]]
 

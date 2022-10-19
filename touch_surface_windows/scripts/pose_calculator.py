@@ -130,24 +130,6 @@ class Posecalculator() : #Process) :
             hand_keypoints_result = hands.process(image)
             image.flags.writeable = True
             
-            """
-            if hand_keypoints_result.multi_hand_landmarks is not None :
-                hand_landmarks = hand_keypoints_result.multi_hand_landmarks[0]
-                landmark_list = calc_landmark_list(image, hand_landmarks)
-
-                index_finger_coord_cam = landmark_list[8]
-                middle_finger_coord_cam = landmark_list[12]
-
-                index_finger_coord = self.transformCoord(
-                    index_finger_coord_cam
-                )
-                middle_finger_coord = self.transformCoord(
-                    middle_finger_coord_cam
-                )
-
-                #pyautogui.moveTo(*index_finger_coord)
-            """
-
 
 
             if hand_keypoints_result.multi_hand_landmarks is not None :
