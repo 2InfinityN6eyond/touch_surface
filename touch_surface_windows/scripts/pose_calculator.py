@@ -48,10 +48,6 @@ class Posecalculator() : #Process) :
 
         self.bluetooth_reciever_to_pose_calculator = bluetooth_reciever_to_pose_calculator
 
-        self.frame_width = frame_width
-        self.frame_height = frame_height
-        self.fps         = fps        
-
         self.configs_n_vals = {
             "homography" : None,
             "checker_corner_shape" : (8, 5),
@@ -165,7 +161,9 @@ class Posecalculator() : #Process) :
 
         if not ret:
             return None
-            
+        
+        return
+
         #combined_image = cv2.addWeighted(depth_color_image, 0.6, body_image_color, 0.4, 0)
         #combined_image = body_frame.draw_bodies(combined_image)
         
