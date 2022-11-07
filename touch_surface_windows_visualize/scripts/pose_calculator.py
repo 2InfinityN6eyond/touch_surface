@@ -13,7 +13,6 @@ from scripts.utils import calc_landmark_list
 
 from scripts.utils import *
 
-
 import pyautogui
 from pynput.mouse import Button, Controller
 
@@ -26,7 +25,7 @@ class Posecalculator() :
         frame_width = 1920,
         frame_height = 1080,
         fps         = 30,
-        filter_recent_coeff = 0.4
+        filter_recent_coeff = 0.3
     ) :
 
         self.to_visualizer_queue = to_visualizer_queue
@@ -57,7 +56,7 @@ class Posecalculator() :
         }
         self.run()
 
-    def run(self) :    
+    def run(self) :
         self.video_cap = cv2.VideoCapture(0)
         self.video_cap.set(
             cv2.CAP_PROP_FRAME_WIDTH, 
@@ -74,7 +73,6 @@ class Posecalculator() :
         )
 
         self.readImage()
-
         self.calibrate()
 
         mp_hands = mp.solutions.hands
@@ -149,9 +147,10 @@ class Posecalculator() :
                         landmark_list,
                         line_thickness = 4
                     )
-                self.to_visualizer_queue.put(
-                    debug_image
-                )
+                self.to_visualizer_queue.put({
+                    "type" : "processed",
+                    "data" : debug_image
+                })
 
             else : continue
 
@@ -159,6 +158,11 @@ class Posecalculator() :
         image = 10
         ret, image = self.video_cap.read()
         self.image = image
+
+        self.to_visualizer_queue.put({
+            "type" : "raw",
+            "data" : image
+        })
         return ret
 
     def calibrate(self) :
